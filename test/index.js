@@ -1,42 +1,92 @@
-const WIDTH = 1920;
-const HEIGHT = 1080;
+const WIDTH = 1600;
+const HEIGHT = 900;
+const Y_AXIS = 1;
+const X_AXIS = 2;
 
 let points = [];
+let button;
 
-const POPULATION = 250;
-const DISTANCE_THRESHOLD = 50;
-const DEBUG = false;
-const RESPAWN_RATE_PERCENT = 0.2;
+const POPULATION = 500;
+const DISTANCE_THRESHOLD = 20;
+let DEBUG = false;
+const RESPAWN_RATE_PERCENT = 0.5;
+let VAR1 = 0;
+const comparisonSet = generateComparisonSet(POPULATION);
 
-const compSet = generateComparisonSet(POPULATION);
+let LINE_COLOR;
 
+let mic;
+let track, amp, fft;
+let inp;
+
+let spectrum, waveform;
+
+
+function preload() {
+    soundFormats('mp3');
+    track = loadSound('../assets/jonh/04 - Collider.mp3');
+}
 
 function setup () {
     createCanvas(WIDTH, HEIGHT);
     color(255);
     stroke(255);
     fill(255);
+    frameRate(60);
+
+    button = createButton('DEBUG');
+    button.position(15, 15);
+    button.mousePressed(() => DEBUG = !DEBUG);
+
+    inp = createSlider(0, 1000, VAR1);
+    inp.position(100, 15);
 
     for (let i = 0; i < POPULATION; i++) {
-        points[i] = new Point();
+        points[i] = new MatrixNode();
     }
+
+    // mic = new p5.AudioIn();
+    LINE_COLOR = color(255);
+    amp = new p5.Amplitude();
+    fft = new p5.FFT();
+    // mic.start();
+    track.play();
 }
 
 function draw() {
     background(0);
+    // setGradient(0, 0, width, height, color(178, 4, 255), color(2, 251, 211), Y_AXIS);
+    spectrum = fft.analyze();
+    waveform = fft.waveform();
+    VAR1 = inp.value();
     const cursorVec = new Vec2d(mouseX, mouseY);
     points.forEach(updatePoint);
-    compSet.forEach(drawConnections);
+    comparisonSet.forEach(drawConnections);
     debugStats();
 }
 
 function updatePoint(point) {
-    rebaseVelocity(point);
-    //mouseAttractionAngle(point);
-    // mouseAttractionVelocity(point);
-    mouseProximityTurbolent(point);
-    mouseProximityIncreasedReach(point);
-    // mouseProximityDecreasedReach(point);
+    const mod = modFFTWaveformAbsScale;
+    const vec = centerVec();
+    const ypos = 200;
+    setVelocity(point, 0.3);
+    stroke(LINE_COLOR);
+    respawnPoint(point, vec, mod(0, 5, ypos), 50);
+
+    directionRepulsionPoint(point, vec);
+    // directionAttractionPoint(point, vec);
+
+    velocityProximityIncrease(point, vec, mod(250, 150, ypos), mod(0, 10, ypos), mod(0, 30, ypos));
+
+    reachProximityIncrease(point, vec, mod(400, 200, ypos), mod(50, 20, ypos), mod(30, 20, ypos));
+
+    // reachProximityIncrease(point, vec, mod(400, 200, ypos), mod(100, 300, ypos), mod(0, 5, ypos));
+
+    directionRandomChange(point, mod(-PI / 4, PI / 4, ypos));
+    velocityRandomChange(point, mod(-1, 50, ypos));
+
+    setStrokeWeight(point, mod(1, 3, ypos))
+
     point.move();
     point.draw();
 }
@@ -44,12 +94,41 @@ function updatePoint(point) {
 function debugStats() {
     if (!DEBUG) return;
 
+    const margin = 25;
     const offset = 15;
+    const x_offset = 10;
 
-    text(`x: ${mouseX}`, 5, offset);
-    text(`y: ${mouseY}`, 5, 2 * offset);
-    text(`pop: ${POPULATION}`, 5, 3 * offset);
-    text(`rr: ${RESPAWN_RATE_PERCENT}%`, 5, 4 * offset);
+    strokeWeight(0.3);
+    stroke(255);
+
+    text(`x: ${mouseX}`, x_offset, margin + offset);
+    text(`y: ${mouseY}`, x_offset, margin +  2 * offset);
+    text(`pop: ${POPULATION}`, x_offset,  margin + 3 * offset);
+    text(`rr: ${RESPAWN_RATE_PERCENT}%`, x_offset,  margin + 4 * offset);
+    text(`mic_lv: ${mic ? mic.getLevel() : 'OFF' }`, x_offset,  margin + 5 * offset);
+    text(`amp_lv: ${amp ? amp.getLevel() : 'OFF' }`, x_offset,  margin + 6 * offset);
+
+    const spectrum_h = 100;
+    const s_w = 100;
+    noStroke();
+    fill(0,255,0); // spectrum is green
+    for (var i = 0; i< spectrum.length; i++) {
+        var x = map(i, 0, spectrum.length, 0, s_w);
+        var h = -spectrum_h + map(spectrum[i], 0, 255, spectrum_h, 0);
+        rect(x, spectrum_h, s_w / spectrum.length, h );
+    }
+
+    noFill();
+    beginShape();
+    stroke(255,0,0); // waveform is red
+    strokeWeight(1);
+    for (var i = 0; i< waveform.length; i++) {
+        var x = map(i, 0, waveform.length, 0, s_w);
+        var y = map( waveform[i], -1, 1, 0, spectrum_h);
+        vertex(x,y);
+    }
+
+    stroke(255)
 }
 
 function drawConnections([a, b]) {
@@ -59,113 +138,19 @@ function drawConnections([a, b]) {
         points[a].drawConnection(points[b]);
 }
 
-class Point {
-    hide = !DEBUG;
-    direction = PI;
-    debug = DEBUG;
-    reach = DISTANCE_THRESHOLD;
-
-    constructor(
-        velocity = 0,
-        size = 5,
-        x = Math.floor(Math.random() * WIDTH),
-        y = Math.floor(Math.random() * HEIGHT)
-    ) {
-        this.x = x;
-        this.y = y;
-        this.velocity = velocity;
-        this.size = size;
-    }
-
-    changeDirection(delta) {
-        this.direction = this.direction + delta;
-    }
-
-    setDirection(direction) {
-        this.direction = direction;
-    }
-
-    setVelocity(velocity) {
-        this.velocity = velocity;
-    }
-
-    changeVelocity(delta) {
-        this.velocity = this.velocity + delta;
-    }
-
-    setReach(reach) {
-        this.reach = reach;
-    }
-
-    changeReach(delta) {
-        this.reach += delta;
-    }
-
-    inReach(p) {
-        return this.distance(p) <= Math.min(this.reach, p.reach);
-    }
-
-    drawConnection(p) {
-        const max_weight = 2;
-        const base_weight = 0.1;
-        const roundTo = 1000;
-
-        const ratio = 1 - this.distance(p) / Math.min(this.reach, p.reach);
-        const weight = Math.min(max_weight, base_weight + Math.round(ratio * max_weight * roundTo) / roundTo);
-
-        strokeWeight(weight);
-        line(this.x, this.y, p.x, p.y);
-    }
-
-    move() {
-        this.x += Math.sin(this.direction) * this.velocity;
-        this.y += Math.cos(this.direction) * this.velocity;
-    }
-
-    draw() {
-        if (!this.hide)
-            ellipse(this.x, this.y, this.size, this.size);
-
-        if (this.debug)
-            this.debugText();
-
-        if ((Math.random() * 100) > (100 - RESPAWN_RATE_PERCENT))
-            this.respawn();
-    }
-
-    respawn() {
-        this.x = Math.floor(Math.random() * WIDTH);
-        this.y = Math.floor(Math.random() * HEIGHT);
-    }
-
-    distance(p) {
-        return Math.sqrt(Math.pow(p.x - this.x, 2) + Math.pow(p.y - this.y, 2));
-    }
-
-    angle(p) {
-        return Math.atan2((p.x - this.x), (p.y -  this.y));
-    }
-
-    debugText() {
-        text(`x: ${this.x}`, this.x + 10, this.y);
-        text(`y:${this.y}`, this.x + 10, this.y + 20);
-        text(`direction ${this.direction}`,this.x + 10, this.y + 40);
-        text(`velocity ${this.velocity}`,this.x + 10, this.y + 60);
-
-        const dx = this.x + Math.sin(this.direction) * 30;
-        const dy = this.y + Math.cos(this.direction) * 30;
-
-        stroke(0, 255, 255);
-        line(this.x, this.y, dx, dy);
-        stroke(0);
-    }
-}
-
 class Vec2d {
     constructor(x,y) {
         this.x = x;
         this.y = y;
     }
+}
+
+function centerVec () {
+    return new Vec2d(WIDTH / 2, HEIGHT / 2);
+}
+
+function mouseVec () {
+    return new Vec2d(mouseX, mouseY);
 }
 
 
@@ -189,83 +174,24 @@ function generateComparisonSet(size) {
     return set;
 }
 
-function rebaseVelocity(point) {
-    point.setVelocity(0);
-}
+function setGradient(x, y, w, h, c1, c2, axis) {
+    noFill();
 
-function mouseProximityTurbolentOnClick(point) {
-    mouseProximityTurbolent(point, mouseIsPressed);
-}
-
-function mouseProximityTurbolent(point, ignore = false) {
-    const base_turbolence = 0.5;
-    const max_turbolence = 3;
-    const distance_treshold = 700;
-    const mouse_distance = point.distance(new Vec2d(mouseX, mouseY));
-
-    const distanceRatio = Math.min(mouse_distance / distance_treshold, 1);
-
-    const turbolence = Math.min(
-        base_turbolence + (max_turbolence - (distanceRatio * max_turbolence)),
-        max_turbolence
-    );
-
-    point.changeDirection(randomRangeFloat(-turbolence, turbolence));
-    point.changeVelocity(randomRangeFloat(base_turbolence, turbolence));
-}
-
-function mouseProximityTurbolentInverseOnClick(point) {
-    mouseProximityTurbolentInverse(point, mouseIsPressed);
-}
-
-function mouseProximityTurbolentInverse(point, ignore) {
-    const base_turbolence = 4;
-    const min_turbolence = 0.05;
-    const distance_treshold = 400;
-    const mouse_distance = point.distance(new Vec2d(mouseX, mouseY));
-    const distanceRatio = 1 - mouse_distance / distance_treshold;
-
-    const turbolence = Math.min(base_turbolence - (ignore ? 0 : distanceRatio) * (base_turbolence - min_turbolence), base_turbolence);
-
-    point.changeDirection(randomRangeFloat(-turbolence, turbolence));
-    point.setVelocity(randomRangeFloat(min_turbolence, turbolence));
-    point.move();
-}
-
-function mouseAttractionAngle(point) {
-    const angle = point.angle(new Vec2d(mouseX, mouseY));
-    point.setDirection(angle);
-}
-
-function mouseAttractionVelocity(point) {
-    const distance_treshold = 600;
-    const base_velocity = 0.2;
-    const mouse_distance = point.distance(new Vec2d(mouseX, mouseY));
-    const distanceRatio = 1 - Math.min(1, mouse_distance / distance_treshold);
-
-    point.setVelocity(base_velocity * distanceRatio);
-}
-
-function mouseProximityDecreasedReach(point) {
-    const distance_treshold = 600;
-    const base_reach = 100;
-    const min_reach = 20;
-    const mouse_distance = point.distance(new Vec2d(mouseX, mouseY));
-    const distanceRatio = Math.min(1, mouse_distance / distance_treshold);
-
-    const reach = min_reach + (base_reach - min_reach) * distanceRatio;
-
-    point.setReach(reach);
-}
-
-function mouseProximityIncreasedReach(point) {
-    const distance_treshold = 600;
-    const base_reach = 60;
-    const max_reach = 100;
-    const mouse_distance = point.distance(new Vec2d(mouseX, mouseY));
-    const distanceRatio = 1 - Math.min(1, mouse_distance / distance_treshold);
-
-    const reach = base_reach + (randomRange(max_reach - 5, max_reach + 5) - base_reach) * distanceRatio;
-
-    point.setReach(reach);
+    if (axis === Y_AXIS) {
+        // Top to bottom gradient
+        for (let i = y; i <= y + h; i++) {
+            let inter = map(i, y, y + h, 0, 1);
+            let c = lerpColor(c1, c2, inter);
+            stroke(c);
+            line(x, i, x + w, i);
+        }
+    } else if (axis === X_AXIS) {
+        // Left to right gradient
+        for (let i = x; i <= x + w; i++) {
+            let inter = map(i, x, x + w, 0, 1);
+            let c = lerpColor(c1, c2, inter);
+            stroke(c);
+            line(i, y, i, y + h);
+        }
+    }
 }

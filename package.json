@@ -1,0 +1,29 @@
+{
+  "name": "p5",
+  "version": "1.0.0",
+  "description": "Collection of p5.js projects",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jkbpvsc/p5js.git"
+  },
+  "keywords": [
+    "p5js",
+    "p5",
+    "processing",
+    "interactive"
+  ],
+  "author": "Jakob Povsic",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jkbpvsc/p5js/issues"
+  },
+  "homepage": "https://github.com/jkbpvsc/p5js#readme"
+}
