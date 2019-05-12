@@ -6,7 +6,7 @@ const X_AXIS = 2;
 let points = [];
 let button;
 
-const POPULATION = 500;
+const POPULATION = 300;
 const DISTANCE_THRESHOLD = 20;
 let DEBUG = false;
 const RESPAWN_RATE_PERCENT = 0.5;
@@ -55,11 +55,9 @@ function setup () {
 
 function draw() {
     background(0);
-    // setGradient(0, 0, width, height, color(178, 4, 255), color(2, 251, 211), Y_AXIS);
     spectrum = fft.analyze();
     waveform = fft.waveform();
     VAR1 = inp.value();
-    const cursorVec = new Vec2d(mouseX, mouseY);
     points.forEach(updatePoint);
     comparisonSet.forEach(drawConnections);
     debugStats();
@@ -68,24 +66,23 @@ function draw() {
 function updatePoint(point) {
     const mod = modFFTWaveformAbsScale;
     const vec = centerVec();
-    const ypos = 200;
+    const waveform_index = 200;
     setVelocity(point, 0.3);
     stroke(LINE_COLOR);
-    respawnPoint(point, vec, mod(0, 5, ypos), 50);
+    respawnPoint(point, vec, mod(0, 5, waveform_index), 50);
 
     directionRepulsionPoint(point, vec);
     // directionAttractionPoint(point, vec);
 
-    velocityProximityIncrease(point, vec, mod(250, 150, ypos), mod(0, 10, ypos), mod(0, 30, ypos));
-
-    reachProximityIncrease(point, vec, mod(400, 200, ypos), mod(50, 20, ypos), mod(30, 20, ypos));
+    velocityProximityIncrease(point, vec, mod(250, 150, waveform_index), mod(0, 10, waveform_index), mod(0, 30, waveform_index));
+    reachProximityIncrease(point, vec, mod(400, 200, waveform_index), mod(30, 20, waveform_index), mod(70, 20, waveform_index));
 
     // reachProximityIncrease(point, vec, mod(400, 200, ypos), mod(100, 300, ypos), mod(0, 5, ypos));
 
-    directionRandomChange(point, mod(-PI / 4, PI / 4, ypos));
-    velocityRandomChange(point, mod(-1, 50, ypos));
+    directionRandomChange(point, mod(0, PI / 4, waveform_index));
+    velocityRandomChange(point, mod(-1, 50, waveform_index));
 
-    setStrokeWeight(point, mod(1, 3, ypos))
+    setStrokeWeight(point, mod(1, 5, waveform_index));
 
     point.move();
     point.draw();
